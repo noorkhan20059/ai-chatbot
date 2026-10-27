@@ -1,0 +1,6 @@
+{
+  "name": "Gemini Next AI Chatbot",
+  "description": "Fast, modern, and responsive AI chatbot powered by Google Gemini API with conversation history CRUD and local storage persistence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
