@@ -13,7 +13,7 @@ import {
 import { Sidebar } from './components/Sidebar';
 import { ChatHeader } from './components/ChatHeader';
 import { MessageItem } from './components/MessageItem';
-import { PromptComposer } from './components/PromptComposer';
+import { PromptComposer, ComposerAttachment } from './components/PromptComposer';
 import { DocsModal } from './components/DocsModal';
 import { RenameModal } from './components/RenameModal';
 import { Zap, ArrowRight, Loader2, Sparkles, MessageSquareDashed } from 'lucide-react';
@@ -214,8 +214,8 @@ export default function App() {
   };
 
   // Send Message & Stream Gemini Response
-  const handleSendMessage = async (userPrompt: string) => {
-    if (!userPrompt.trim() || isGenerating) return;
+  const handleSendMessage = async (userPrompt: string, attachments?: ComposerAttachment[]) => {
+    if ((!userPrompt.trim() && (!attachments || attachments.length === 0)) || isGenerating) return;
 
     const userMessageId = `msg-u-${Date.now()}`;
     const userMessage: ChatMessage = {
@@ -223,7 +223,16 @@ export default function App() {
       role: 'user',
       content: userPrompt,
       timestamp: Date.now(),
-      tokenCount: Math.ceil(userPrompt.length / 4),
+      tokenCount: Math.ceil((userPrompt || '').length / 4),
+      attachments: attachments?.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        mimeType: a.mimeType,
+        size: a.size,
+        previewUrl: a.previewUrl,
+        durationSec: a.durationSec,
+      })),
     };
 
     // Auto update title if generic
@@ -231,7 +240,9 @@ export default function App() {
       activeConversation.messages.length === 0 ||
       activeConversation.title.startsWith('New Conversation');
     const autoTitle = shouldRenameTitle
-      ? userPrompt.slice(0, 36) + (userPrompt.length > 36 ? '...' : '')
+      ? userPrompt
+        ? userPrompt.slice(0, 36) + (userPrompt.length > 36 ? '...' : '')
+        : `Analysis: ${attachments?.[0]?.name || 'Media'}`
       : activeConversation.title;
 
     // Update state with user message
@@ -266,21 +277,95 @@ export default function App() {
         content: m.content,
       }));
 
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: userPrompt,
-          messages: payloadMessages,
-          model: activeConversation.model || 'gemini-3.1-flash-lite',
-          stream: true,
-        }),
-        signal: controller.signal,
-      });
+      const payloadAttachments = attachments?.map((a) => ({
+        id: a.id,
+        name: a.name,
+        type: a.type,
+        mimeType: a.mimeType,
+        data: a.base64Data,
+        text: a.textContent,
+      }));
 
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.error || `HTTP ${res.status}: Failed to reach Gemini API`);
+      let res: Response | null = null;
+      let isDirectFallback = false;
+
+      try {
+        res = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: userPrompt,
+            messages: payloadMessages,
+            attachments: payloadAttachments,
+            model: activeConversation.model || 'gemini-3.1-flash-lite',
+            stream: true,
+          }),
+          signal: controller.signal,
+        });
+      } catch (networkErr: any) {
+        if (networkErr.name === 'AbortError') throw networkErr;
+        isDirectFallback = true;
+      }
+
+      // If /api/chat is 404 on Vercel static deployment, fallback directly to Gemini SSE
+      if (!res || res.status === 404) {
+        isDirectFallback = true;
+      }
+
+      if (isDirectFallback) {
+        const DIRECT_KEY = 'AQ.Ab8RN6KyEVPKDi53bBYId6awYNXqJrhuyybOvQ1XCG2J4-rfgQ';
+        const parts: any[] = [];
+
+        if (payloadAttachments && payloadAttachments.length > 0) {
+          for (const att of payloadAttachments) {
+            if (att.data) {
+              parts.push({
+                inline_data: {
+                  mime_type: att.mimeType || 'image/jpeg',
+                  data: att.data.replace(/^data:[^;]+;base64,/, ''),
+                },
+              });
+            } else if (att.text) {
+              parts.push({ text: `[Document: ${att.name}]\n${att.text}` });
+            }
+          }
+        }
+
+        if (userPrompt) {
+          parts.push({ text: userPrompt });
+        }
+
+        const directContents = payloadMessages.slice(-6).map((m) => ({
+          role: m.role === 'assistant' ? 'model' : 'user',
+          parts: [{ text: m.content }],
+        }));
+        directContents.push({ role: 'user', parts });
+
+        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:streamGenerateContent?alt=sse&key=${DIRECT_KEY}`;
+        res = await fetch(directUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: directContents,
+            system_instruction: {
+              parts: [{ text: 'You are an accurate, concise, ultra-fast AI assistant. Answer directly without fluff.' }],
+            },
+            generationConfig: {
+              temperature: 0.3,
+              maxOutputTokens: 2048,
+            },
+          }),
+          signal: controller.signal,
+        });
+      }
+
+      if (!res || !res.ok) {
+        const errorData = await res?.json().catch(() => ({}));
+        let errMsg = errorData?.error?.message || errorData?.error;
+        if (!errMsg) {
+          errMsg = `HTTP ${res?.status || 500}: Failed to reach Gemini API. Please check your network connection.`;
+        }
+        throw new Error(errMsg);
       }
 
       // Read SSE stream
@@ -312,12 +397,25 @@ export default function App() {
           try {
             const parsed = JSON.parse(dataContent);
             if (parsed.error) {
-              throw new Error(parsed.error);
+              throw new Error(parsed.error.message || parsed.error);
             }
+
+            // Supports both /api/chat format and Google GenerativeLanguage SSE format
+            let incomingChunk = '';
             if (parsed.text) {
-              accumulatedText += parsed.text;
+              incomingChunk = parsed.text;
+            } else if (parsed.candidates?.[0]?.content?.parts?.[0]?.text) {
+              incomingChunk = parsed.candidates[0].content.parts[0].text;
+            }
+
+            if (incomingChunk) {
+              if (firstTokenMs === undefined) {
+                firstTokenMs = Date.now() - startTime;
+              }
+              accumulatedText += incomingChunk;
               setCurrentStreamingText(accumulatedText);
             }
+
             if (parsed.elapsedMs) {
               latencyMs = parsed.elapsedMs;
             }
@@ -326,6 +424,8 @@ export default function App() {
             }
             if (parsed.estimatedTokens) {
               totalTokens = parsed.estimatedTokens;
+            } else if (parsed.usageMetadata?.totalTokenCount) {
+              totalTokens = parsed.usageMetadata.totalTokenCount;
             }
           } catch (e: any) {
             // Ignore partial JSON splits
