@@ -315,13 +315,13 @@ export default function App() {
         isDirectFallback = true;
       }
 
-      // If /api/chat is 404 on Vercel static deployment, fallback directly to Gemini SSE
-      if (!res || res.status === 404) {
+      // If /api/chat fails or returns 404/500/401 on Vercel, fallback directly to Gemini SSE
+      if (!res || !res.ok || res.status === 404 || res.status === 500 || res.status === 401) {
         isDirectFallback = true;
       }
 
       if (isDirectFallback) {
-        const DIRECT_KEY = (customKey && customKey.trim()) || 'AQ.Ab8RN6K_6_BDU9MacU_swU_NpvY3qrwvaS2UrMq__Bj-rsdBBQ';
+        const DIRECT_KEY = (customKey && customKey.trim()) || 'AQ.Ab8RN6KtHgAizYcjSdRB6O1kjDAasNZlLOoG_DGYRpCrQO4Vyw';
         const parts: any[] = [];
 
         if (payloadAttachments && payloadAttachments.length > 0) {

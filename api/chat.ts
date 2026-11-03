@@ -9,7 +9,7 @@ try {
 }
 
 // Verified active user key from user prompt
-const ACTIVE_USER_KEY = 'AQ.Ab8RN6K_6_BDU9MacU_swU_NpvY3qrwvaS2UrMq__Bj-rsdBBQ';
+const ACTIVE_USER_KEY = 'AQ.Ab8RN6KtHgAizYcjSdRB6O1kjDAasNZlLOoG_DGYRpCrQO4Vyw';
 
 const DEFAULT_PRECISION_SYSTEM_INSTRUCTION = `You are an accurate, concise, and ultra-fast multimodal AI assistant.
 Follow these core rules strictly:
@@ -54,7 +54,14 @@ export default async function handler(req: any, res: any) {
   let apiKey = ACTIVE_USER_KEY;
   if (clientApiKey && typeof clientApiKey === 'string' && clientApiKey.trim()) {
     apiKey = clientApiKey.trim();
-  } else if (envKey && typeof envKey === 'string' && envKey.trim() && !envKey.startsWith('AQ.Ab8RN6L')) {
+  } else if (
+    envKey &&
+    typeof envKey === 'string' &&
+    envKey.trim() &&
+    !envKey.startsWith('AQ.Ab8RN6L') &&
+    !envKey.startsWith('AQ.Ab8RN6Ky') &&
+    !envKey.startsWith('AQ.Ab8RN6K_6_')
+  ) {
     apiKey = envKey.trim();
   }
 

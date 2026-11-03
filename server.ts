@@ -11,7 +11,8 @@ try {
   dns.setDefaultResultOrder('ipv4first');
 } catch {}
 
-dotenv.config();
+dotenv.config({ path: '.env.local', override: true });
+dotenv.config({ override: true });
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
