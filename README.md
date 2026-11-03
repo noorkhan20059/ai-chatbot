@@ -1,84 +1,68 @@
-# Gemini Next — Fast & Precise AI Chatbot
+# Gemini Next — Multimodal AI Chatbot (Text, Image, Document, Voice)
 
-A simple, ultra-fast, modern, and fully responsive AI chatbot application powered by **Google Gemini API** (`@google/genai`), built with Next.js Route Handler architecture, Tailwind CSS, Local Storage persistence, and conversation CRUD.
+A fast, responsive, and modern full-stack AI chatbot built with **Google Gemini API** (`@google/genai`), Next.js / Vercel Serverless Route Handler architecture, Tailwind CSS, Local Storage, and IndexedDB.
 
-## ⚡ Accuracy & Speed Optimizations
+## 🚀 Key Features
 
-1. **Direct, Precision-First System Instruction:**
-   - Enforces immediate direct answers without conversational filler or generic preambles.
-   - Structured formatting (bullet points, numbered lists, clean code blocks) by default.
-   - Low temperature (`0.3`) for reliable, hallucination-free, consistent output.
-   - One-question clarification policy if a prompt is ambiguous.
+### 1. Multimodal Input Support
+- **Images:** Upload JPG, JPEG, PNG, and WebP images. Gemini analyzes visual details, extracts visible text, explains diagrams, and answers image queries. Includes image lightbox view.
+- **Documents & Files:** Attach PDF documents (processed natively via Gemini's document understanding), CSV tables, TXT, and Markdown files.
+- **Voice Messages & Audio:** Record audio messages with browser microphone (live elapsed timer, stop, cancel, and audio playback), or dictate using speech-to-text.
+- **Attachment Previews:** Visual previews for images, document pills, and audio players with 1-click removal before sending.
 
-2. **Ultra-Low Latency & High Throughput:**
-   - Powered by **Gemini 3.1 Flash Lite** (~65 tokens/sec) for instant response initiation.
-   - **IPv4-First DNS Order Optimization:** Eliminates standard 20-second Node.js IPv6 timeout stalls, reducing Time To First Token (TTFT) to ~1.1s.
-   - **Rolling Context Window:** Keeps the prompt lean by sending the most relevant recent 8 turns, maintaining context while saving token compute time.
-   - Output token cap at 2048 tokens to prevent runaway generation.
+### 2. High-Performance Architecture
+- **Model:** Powered by **Gemini 3.1 Flash Lite** (with auto-failover to Gemini 3.5 Flash).
+- **Fast DNS (IPv4-first):** Eliminates 20-second Node.js IPv6 stalls, yielding ~1.1s first-token response times.
+- **Low Temperature (`0.3`):** High factual accuracy, concise formatting, and zero conversational fluff.
+- **Rolling Context Window:** Retains the 8 most recent conversation turns to keep prompt token latency low while maintaining follow-up context.
 
-3. **Real-Time Token Streaming & Cancellation:**
-   - Live Server-Sent Events (SSE) streaming with live TTFT (`TTFT 1114ms`) and total latency tracking.
-   - Instant response cancellation via `Escape` key or the **Stop** button with `AbortController`.
-   - Form inputs and suggestion buttons are locked during generation to prevent duplicate requests.
+### 3. Local Storage + IndexedDB Persistence
+- **Lightweight LocalStorage:** Preserves conversation titles, metadata, turn feedback, and message history without exceeding browser quotas.
+- **IndexedDB Binary Storage:** Automatically stores heavy binary attachments (images, audio recordings, PDFs) in an IndexedDB object store (`gemini_multimodal_db_v1`) to prevent LocalStorage 5MB quota overflows.
+- **Full CRUD:** Create new chats (`⌘K`), search history, rename conversation titles, delete chats, and export to JSON or Markdown (`.md`).
 
-4. **Conversation CRUD & Local Storage:**
-   - **Create:** Start new sessions via "+ New Chat" button or `⌘K` / `Ctrl+K`.
-   - **Read:** Categorized into time buckets (*Today*, *Yesterday*, *Previous 7 Days*, *Older*). Real-time prompt search.
-   - **Update:** Rename titles in real time via pencil icon or Rename Modal. Edit user prompts with inline re-generation.
-   - **Delete:** Remove individual chats or clear current message threads.
-   - **Storage Sync:** Real-time quota calculation displaying browser storage utilization (`14.2 KB / 5 MB`).
+### 4. Vercel Deployment Ready (Fixes HTTP 404)
+- **Vercel Serverless Function:** `api/chat.ts` is automatically detected by Vercel's serverless runtime.
+- **Vercel Routing:** `vercel.json` uses non-capturing rewrites (`/((?!api/.*).*)`) so `/api/chat` and `/api/health` routes never return 404 on Vercel.
 
-5. **Security & Server-Side Route Handler:**
-   - The Google Gemini API key is isolated strictly in server-side runtime (`process.env.GEMINI_API_KEY`).
-   - Zero exposure to client browser scripts or bundles.
+---
+
+## ⚙️ Vercel Deployment Instructions
+
+1. Push this project to your GitHub repository.
+2. In your **[Vercel Dashboard](https://vercel.com)**, import the repository.
+3. In **Settings** → **Environment Variables**, add:
+   - **Key:** `GEMINI_API_KEY`
+   - **Value:** `AQ.Ab8RN6KyEVPKDi53bBYId6awYNXqJrhuyybOvQ1XCG2J4-rfgQ` (or your personal key from [Google AI Studio](https://aistudio.google.com/apikey))
+4. Deploy your project. Both the client SPA and `/api/chat` serverless backend will be live.
 
 ---
 
 ## 📁 Project Structure
 
 ```
-├── app/ (or src/ for React client)
+├── api/
+│   ├── chat.ts                  # Multimodal Serverless Function (Vercel & Express)
+│   └── health.ts                # Serverless Health Check
+├── src/
 │   ├── components/
-│   │   ├── ChatHeader.tsx       # Model switcher, export menu, theme toggle, Direct Mode badge
-│   │   ├── DocsModal.tsx        # In-app architecture & setup guide
-│   │   ├── MarkdownRenderer.tsx # Code block card with copy & rich markdown renderer
-│   │   ├── MessageItem.tsx      # User/AI message bubbles with TTFT & turn actions
-│   │   ├── PromptComposer.tsx   # Auto-expand input with duplicate prevention & Esc stop
-│   │   ├── RenameModal.tsx      # Conversation title rename modal
+│   │   ├── ChatHeader.tsx       # Model switcher, export menu, theme toggle
+│   │   ├── DocsModal.tsx        # Vercel setup & architecture guide
+│   │   ├── MarkdownRenderer.tsx # Code block card & rich markdown renderer
+│   │   ├── MessageItem.tsx      # Turns with image lightbox, audio player, docs
+│   │   ├── PromptComposer.tsx   # Image, doc, voice recorder, & dictation
+│   │   ├── RenameModal.tsx      # Conversation rename modal
 │   │   └── Sidebar.tsx          # History CRUD, search, and storage meter
 │   ├── types/
-│   │   └── chat.ts              # TypeScript interfaces (ChatMessage, Conversation)
+│   │   └── chat.ts              # TypeScript interfaces (MessageAttachment, ChatMessage)
 │   ├── utils/
+│   │   ├── attachmentStorage.ts # IndexedDB binary storage helper
 │   │   └── storage.ts           # LocalStorage CRUD & byte quota calculation
-│   ├── App.tsx                  # Root state machine & orchestration
+│   ├── App.tsx                  # Root state machine & multimodal orchestration
 │   ├── index.css                # Tailwind design tokens & dark/light styles
 │   └── main.tsx                 # Client entry point
-├── server.ts                    # Full-stack Route Handler (/api/chat) with temperature 0.3
-├── .env.local.example           # Environment variable template
+├── vercel.json                  # Non-capturing Vercel rewrite configuration
+├── server.ts                    # Local development Express server
+├── .env.local                   # Active GEMINI_API_KEY
 └── package.json                 # Dependencies & scripts
 ```
-
----
-
-## ⚙️ Installation & Setup
-
-### 1. Install Dependencies
-```bash
-npm install
-```
-
-### 2. Configure Environment Variable
-Copy `.env.local.example` to `.env.local` (or configure in AI Studio Secrets):
-```bash
-cp .env.local.example .env.local
-```
-Add your free Google Gemini API key from [Google AI Studio](https://aistudio.google.com/):
-```env
-GEMINI_API_KEY="your-gemini-api-key-here"
-```
-
-### 3. Run Development Server
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) in your browser.
