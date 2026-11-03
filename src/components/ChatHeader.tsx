@@ -174,13 +174,25 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
 
       {/* Right Controls: Docs, Export, Clear, Theme, Latency */}
       <div className="flex items-center gap-1.5 sm:gap-2">
+        {/* Download Code for Vercel */}
+        <a
+          href="/gemini-nextjs-latest.zip"
+          download="gemini-nextjs-latest.zip"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-medium transition-all shadow-sm"
+          title="Download updated code with Image, Doc & Voice support for Vercel"
+        >
+          <Download size={14} />
+          <span className="hidden lg:inline">Download Code (for Vercel)</span>
+          <span className="lg:hidden">Code ZIP</span>
+        </a>
+
         {/* Next.js Setup & API Button */}
         <button
           onClick={onOpenDocs}
           className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#201f22] hover:bg-[#2a2a2c] border border-[#2d2c33] text-[#f4f4f6] text-xs font-medium transition-colors shadow-sm"
         >
           <Terminal size={14} className="text-indigo-400" />
-          <span className="hidden md:inline">Next.js Setup & API</span>
+          <span className="hidden md:inline">Vercel & Setup</span>
           <span className="md:hidden">Setup</span>
         </button>
 

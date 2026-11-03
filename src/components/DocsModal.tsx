@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Copy, Check, Terminal, FolderTree, Key, Play, ShieldAlert } from 'lucide-react';
+import { X, Copy, Check, Terminal, FolderTree, Key, Play, ShieldAlert, Cloud } from 'lucide-react';
 
 interface DocsModalProps {
   isOpen: boolean;
@@ -7,7 +7,7 @@ interface DocsModalProps {
 }
 
 export const DocsModal: React.FC<DocsModalProps> = ({ isOpen, onClose }) => {
-  const [activeTab, setActiveTab] = useState<'structure' | 'env' | 'route' | 'install'>('structure');
+  const [activeTab, setActiveTab] = useState<'vercel' | 'structure' | 'env' | 'route' | 'install'>('vercel');
   const [copiedSnippet, setCopiedSnippet] = useState<string | null>(null);
 
   if (!isOpen) return null;
@@ -18,47 +18,49 @@ export const DocsModal: React.FC<DocsModalProps> = ({ isOpen, onClose }) => {
     setTimeout(() => setCopiedSnippet(null), 2000);
   };
 
+  const vercelJsonSnippet = `{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}`;
+
   const envSnippet = `# Obtain free key from https://aistudio.google.com/
 GEMINI_API_KEY="your-gemini-api-key-here"
 
 # Runtime configuration
-GEMINI_MODEL="gemini-3.8-flash"
+GEMINI_MODEL="gemini-3.1-flash-lite"
 PORT=3000
 NEXT_PUBLIC_APP_URL="http://localhost:3000"`;
 
-  const routeSnippet = `// app/api/chat/route.ts (or server.ts in Express full-stack)
+  const routeSnippet = `// api/chat.ts (Vercel Serverless Function)
 import { GoogleGenAI } from '@google/genai';
-import { NextResponse } from 'next/server';
 
-// Server-side initialization ensures API key is never exposed to the client
 const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY || '',
-  httpOptions: {
-    headers: { 'User-Agent': 'aistudio-build' },
-  },
+  apiKey: process.env.GEMINI_API_KEY,
+  httpOptions: { headers: { 'User-Agent': 'aistudio-build' } },
 });
 
-export async function POST(req: Request) {
-  try {
-    const { prompt, model = 'gemini-3.8-flash' } = await req.json();
+export default async function handler(req: any, res: any) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  const { prompt, model = 'gemini-3.1-flash-lite' } = req.body;
 
-    if (!prompt) {
-      return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
-    }
+  const response = await ai.models.generateContent({
+    model,
+    contents: prompt,
+  });
 
-    const response = await ai.models.generateContent({
-      model,
-      contents: prompt,
-    });
-
-    return NextResponse.json({
-      text: response.text,
-      model,
-      usage: response.usageMetadata,
-    });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  return res.json({ text: response.text });
 }`;
 
   return (
@@ -72,10 +74,10 @@ export async function POST(req: Request) {
             </div>
             <div>
               <h2 className="text-base font-semibold text-[#f4f4f6]">
-                Next.js 14 + Gemini Project Architecture
+                Deployment & Architecture Guide
               </h2>
               <p className="text-xs text-[#908fa0]">
-                Server-side Route Handler, secure environment variables, and token streaming
+                Vercel deployment setup, serverless route handlers, and environment variables
               </p>
             </div>
           </div>
@@ -90,6 +92,17 @@ export async function POST(req: Request) {
         {/* Tab Navigation */}
         <div className="flex bg-[#201f22] px-6 gap-2 border-b border-[#2d2c33] overflow-x-auto">
           <button
+            onClick={() => setActiveTab('vercel')}
+            className={`flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
+              activeTab === 'vercel'
+                ? 'text-indigo-300 border-indigo-400 bg-[#1c1b1d]/60 rounded-t-lg'
+                : 'text-[#908fa0] border-transparent hover:text-[#e5e1e4]'
+            }`}
+          >
+            <Cloud size={14} className="text-emerald-400" />
+            Vercel Deployment (Fix 404)
+          </button>
+          <button
             onClick={() => setActiveTab('structure')}
             className={`flex items-center gap-1.5 px-3.5 py-2.5 text-xs font-medium border-b-2 transition-all whitespace-nowrap ${
               activeTab === 'structure'
@@ -98,7 +111,7 @@ export async function POST(req: Request) {
             }`}
           >
             <FolderTree size={14} />
-            1. Directory Structure
+            Directory Tree
           </button>
           <button
             onClick={() => setActiveTab('env')}
@@ -109,7 +122,7 @@ export async function POST(req: Request) {
             }`}
           >
             <Key size={14} />
-            2. .env.local
+            Environment (.env)
           </button>
           <button
             onClick={() => setActiveTab('route')}
@@ -120,7 +133,7 @@ export async function POST(req: Request) {
             }`}
           >
             <Terminal size={14} />
-            3. Route Handler
+            Route Handler
           </button>
           <button
             onClick={() => setActiveTab('install')}
@@ -131,35 +144,94 @@ export async function POST(req: Request) {
             }`}
           >
             <Play size={14} />
-            4. Install & Run
+            Local Run
           </button>
         </div>
 
         {/* Content */}
         <div className="p-6 overflow-y-auto flex-1 bg-[#1c1b1d] space-y-4">
+          {activeTab === 'vercel' && (
+            <div className="space-y-4">
+              <div className="p-4 rounded-xl bg-indigo-500/10 border border-indigo-500/30 text-xs text-indigo-200 leading-relaxed space-y-2">
+                <div className="flex items-center gap-2 font-semibold text-indigo-300 text-sm">
+                  <span>🚀 How to Sync Image, Doc & Voice Features to Vercel</span>
+                </div>
+                <p>
+                  The Image, Document, and Voice buttons are running live here in your AI Studio build. Because your Vercel site (<strong className="text-white">ai-chatbot-tau-three-34.vercel.app</strong>) automatically builds from your GitHub repository (<strong className="text-white">noorkhan20059/ai-chatbot</strong>), you simply need to push the updated files to GitHub!
+                </p>
+                <div className="pt-1">
+                  <a
+                    href="/gemini-nextjs-latest.zip"
+                    download="gemini-nextjs-latest.zip"
+                    className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-medium text-xs shadow-md transition-all"
+                  >
+                    <Play size={14} className="fill-current" />
+                    <span>📥 Download Complete Project ZIP</span>
+                  </a>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#f4f4f6]">
+                  Method 1: Quick GitHub Upload (2 minutes)
+                </h3>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs text-[#c7c4d7]">
+                  <li>Click the <strong className="text-white">Download Complete Project ZIP</strong> button above.</li>
+                  <li>Extract the ZIP on your computer.</li>
+                  <li>Open your GitHub repository at <strong className="text-white">github.com/noorkhan20059/ai-chatbot</strong>.</li>
+                  <li>Drag and drop the extracted files (especially <code className="text-indigo-300 font-mono">src/components/PromptComposer.tsx</code>, <code className="text-indigo-300 font-mono">src/components/MessageItem.tsx</code>, and <code className="text-indigo-300 font-mono">src/App.tsx</code>).</li>
+                  <li>Click <strong className="text-white">Commit changes</strong>. Vercel will auto-deploy the new buttons within 30 seconds!</li>
+                </ol>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#f4f4f6]">
+                  Method 2: Git Command Line
+                </h3>
+                <div className="p-3.5 bg-[#0e0e10] border border-[#2d2c33] rounded-xl font-mono text-xs text-[#e5e1e4] space-y-1">
+                  <div className="text-[#908fa0]"># In your local repository folder:</div>
+                  <div className="text-emerald-300">git add .</div>
+                  <div className="text-emerald-300">git commit -m "Add Image, Doc, Voice support and fix Vercel deployment"</div>
+                  <div className="text-emerald-300">git push origin main</div>
+                </div>
+              </div>
+
+              <div className="space-y-2 pt-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-[#f4f4f6]">
+                  Step 3: Set GEMINI_API_KEY in Vercel
+                </h3>
+                <ol className="list-decimal list-inside space-y-1.5 text-xs text-[#c7c4d7]">
+                  <li>Go to your project dashboard at <strong className="text-white">vercel.com</strong>.</li>
+                  <li>Click <strong className="text-white">Settings</strong> &rarr; <strong className="text-white">Environment Variables</strong>.</li>
+                  <li>Add variable name: <code className="text-indigo-300 font-mono bg-[#201f22] px-1.5 py-0.5 rounded">GEMINI_API_KEY</code> with your key.</li>
+                  <li>Save and redeploy.</li>
+                </ol>
+              </div>
+
+              <div className="p-3 bg-[#201f22] rounded-xl text-xs text-[#908fa0] leading-relaxed">
+                💡 <strong>How it works:</strong> <code className="text-white font-mono">vercel.json</code> rewrites requests from <code className="text-indigo-300 font-mono">/api/chat</code> directly to the serverless function <code className="text-indigo-300 font-mono">api/chat.ts</code>, preventing any 404 errors.
+              </div>
+            </div>
+          )}
+
           {activeTab === 'structure' && (
             <div className="space-y-3">
               <p className="text-xs text-[#c7c4d7]">
-                Production-grade folder structure separating server-side AI handling from responsive client UI components:
+                Unified folder structure supporting both local development and Vercel serverless deployment:
               </p>
               <div className="p-4 bg-[#0e0e10] border border-[#2d2c33] rounded-xl font-mono text-xs text-[#e5e1e4] leading-relaxed">
-                <pre className="m-0">{`my-gemini-nextjs-app/
-├── app/ (or src/ for React SPA)
-│   ├── api/
-│   │   └── chat/
-│   │       └── route.ts         # Secure Route Handler proxying Gemini SDK
-│   ├── layout.tsx               # Root application layout
-│   └── page.tsx                 # Main client conversation interface
-├── components/
-│   ├── ChatArea.tsx             # Interactive conversation thread
-│   ├── MessageTurn.tsx          # Markdown, code blocks & copy actions
-│   ├── Sidebar.tsx              # CRUD history & LocalStorage persistence
-│   └── PromptComposer.tsx       # Auto-expanding textarea & suggestion pills
-├── lib/
-│   └── gemini.ts                # Server-only GoogleGenAI client singleton
-├── utils/
-│   └── storage.ts               # LocalStorage CRUD & byte quota calculation
-├── .env.local                   # Secret API Key (Never committed to Git!)
+                <pre className="m-0">{`my-gemini-app/
+├── api/
+│   ├── chat.ts                  # Vercel Serverless Function (/api/chat)
+│   └── health.ts                # Serverless Health Check (/api/health)
+├── src/
+│   ├── components/              # ChatHeader, MessageItem, Sidebar, Composer
+│   ├── types/chat.ts            # Chat interfaces
+│   ├── utils/storage.ts         # LocalStorage CRUD & byte quota
+│   └── App.tsx                  # Main client application
+├── vercel.json                  # Vercel deployment rewrites & build config
+├── server.ts                    # Full-stack local dev server
+├── .env.local.example           # Environment variable template
 └── package.json`}</pre>
               </div>
             </div>
@@ -169,7 +241,7 @@ export async function POST(req: Request) {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#c7c4d7]">
-                  Configure your server-side environment variables in <code className="text-indigo-300 font-mono">.env.local</code>:
+                  Configure your environment variables in <code className="text-indigo-300 font-mono">.env.local</code>:
                 </p>
                 <button
                   onClick={() => copyToClipboard(envSnippet, 'env')}
@@ -195,7 +267,7 @@ export async function POST(req: Request) {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <p className="text-xs text-[#c7c4d7]">
-                  Server-side Route Handler (<code className="text-indigo-300 font-mono">app/api/chat/route.ts</code>):
+                  Vercel Serverless Function (<code className="text-indigo-300 font-mono">api/chat.ts</code>):
                 </p>
                 <button
                   onClick={() => copyToClipboard(routeSnippet, 'route')}
@@ -217,9 +289,9 @@ export async function POST(req: Request) {
                 Quick installation commands to run locally:
               </p>
               <div className="p-4 bg-[#0e0e10] border border-[#2d2c33] rounded-xl font-mono text-xs text-[#e5e1e4] space-y-2">
-                <div className="text-[#908fa0]"># 1. Install official Google GenAI SDK</div>
-                <div className="text-emerald-300">npm install @google/genai</div>
-                <div className="text-[#908fa0] pt-2"># 2. Run full-stack dev server</div>
+                <div className="text-[#908fa0]"># 1. Install dependencies</div>
+                <div className="text-emerald-300">npm install</div>
+                <div className="text-[#908fa0] pt-2"># 2. Run local development server</div>
                 <div className="text-emerald-300">npm run dev</div>
               </div>
               <p className="text-xs text-emerald-400 flex items-center gap-1.5 pt-1">
@@ -232,7 +304,7 @@ export async function POST(req: Request) {
         {/* Footer */}
         <div className="px-6 py-3.5 bg-[#201f22] border-t border-[#2d2c33] flex items-center justify-between">
           <span className="text-xs text-[#908fa0]">
-            Complies with official Google AI Studio guidelines
+            Vercel Serverless & Next.js Compatible
           </span>
           <button
             onClick={onClose}

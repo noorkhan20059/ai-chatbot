@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChatMessage } from '../types/chat';
+import { ChatMessage, MessageAttachment } from '../types/chat';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import {
   Sparkles,
@@ -12,6 +12,12 @@ import {
   Trash2,
   Edit3,
   AlertCircle,
+  FileText,
+  FileSpreadsheet,
+  FileCode,
+  Volume2,
+  X,
+  Maximize2,
 } from 'lucide-react';
 
 interface MessageItemProps {
@@ -34,6 +40,7 @@ export const MessageItem: React.FC<MessageItemProps> = ({
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editedText, setEditedText] = useState(message.content);
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const handleCopy = () => {
     navigator.clipboard.writeText(message.content);
@@ -55,6 +62,77 @@ export const MessageItem: React.FC<MessageItemProps> = ({
 
   const estimatedTokens = message.tokenCount || Math.ceil(message.content.length / 4);
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
+  // Render attachment item
+  const renderAttachment = (att: MessageAttachment) => {
+    if (att.type === 'image' && att.previewUrl) {
+      return (
+        <div
+          key={att.id}
+          onClick={() => setSelectedImage(att.previewUrl || null)}
+          className="relative group/img cursor-pointer rounded-xl overflow-hidden border border-[#3e3d48] max-w-xs shadow-md hover:border-indigo-400 transition-all"
+        >
+          <img
+            src={att.previewUrl}
+            alt={att.name}
+            className="w-full max-h-48 object-cover rounded-xl"
+          />
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center text-white">
+            <Maximize2 size={18} />
+          </div>
+          <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 text-[10px] text-white/90 truncate">
+            {att.name} ({formatFileSize(att.size)})
+          </div>
+        </div>
+      );
+    }
+
+    if (att.type === 'audio') {
+      return (
+        <div
+          key={att.id}
+          className="flex flex-col gap-1.5 p-2.5 rounded-xl bg-[#201f22] border border-[#3e3d48] text-xs text-[#f4f4f6]"
+        >
+          <div className="flex items-center gap-2">
+            <Volume2 size={16} className="text-purple-400 shrink-0" />
+            <span className="font-medium truncate text-[11px]">{att.name}</span>
+            <span className="text-[10px] text-[#908fa0] ml-auto">
+              {formatFileSize(att.size)}
+            </span>
+          </div>
+          {att.previewUrl && (
+            <audio controls src={att.previewUrl} className="h-8 w-60 rounded" />
+          )}
+        </div>
+      );
+    }
+
+    // Document
+    return (
+      <div
+        key={att.id}
+        className="flex items-center gap-2.5 px-3 py-2 rounded-xl bg-[#201f22] border border-[#3e3d48] text-xs text-[#f4f4f6] max-w-xs truncate shadow-sm"
+      >
+        {att.mimeType === 'application/pdf' ? (
+          <FileText size={16} className="text-rose-400 shrink-0" />
+        ) : att.name.endsWith('.csv') ? (
+          <FileSpreadsheet size={16} className="text-emerald-400 shrink-0" />
+        ) : (
+          <FileCode size={16} className="text-sky-400 shrink-0" />
+        )}
+        <div className="flex flex-col min-w-0">
+          <span className="font-medium truncate text-[11px]">{att.name}</span>
+          <span className="text-[10px] text-[#908fa0]">{formatFileSize(att.size)}</span>
+        </div>
+      </div>
+    );
+  };
+
   // USER TURN
   if (message.role === 'user') {
     return (
@@ -65,6 +143,13 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             <User size={13} />
           </div>
         </div>
+
+        {/* Attached media previews */}
+        {message.attachments && message.attachments.length > 0 && (
+          <div className="flex flex-wrap justify-end gap-2 my-1">
+            {message.attachments.map(renderAttachment)}
+          </div>
+        )}
 
         {isEditing ? (
           <div className="w-full flex flex-col gap-2 p-3 bg-[#2a2a2c] rounded-2xl border border-indigo-500/50">
@@ -90,9 +175,11 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </div>
           </div>
         ) : (
-          <div className="bg-[#2a2a2c] hover:bg-[#302f33] text-[#f4f4f6] p-4 rounded-2xl rounded-tr-sm shadow-sm text-sm leading-relaxed border border-[#353437] transition-colors relative">
-            <p className="whitespace-pre-wrap">{message.content}</p>
-          </div>
+          message.content && (
+            <div className="bg-[#2a2a2c] hover:bg-[#302f33] text-[#f4f4f6] p-4 rounded-2xl rounded-tr-sm shadow-sm text-sm leading-relaxed border border-[#353437] transition-colors relative">
+              <p className="whitespace-pre-wrap">{message.content}</p>
+            </div>
+          )
         )}
 
         <div className="flex items-center gap-2 text-[11px] text-[#908fa0]">
@@ -118,6 +205,28 @@ export const MessageItem: React.FC<MessageItemProps> = ({
             </button>
           )}
         </div>
+
+        {/* Image Modal Lightbox */}
+        {selectedImage && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm p-4 flex items-center justify-center animate-in fade-in"
+            onClick={() => setSelectedImage(null)}
+          >
+            <div className="relative max-w-4xl max-h-[90vh] overflow-hidden rounded-2xl">
+              <img
+                src={selectedImage}
+                alt="Enlarged view"
+                className="max-w-full max-h-[85vh] object-contain rounded-2xl"
+              />
+              <button
+                onClick={() => setSelectedImage(null)}
+                className="absolute top-3 right-3 p-2 rounded-full bg-black/60 text-white hover:bg-black/80 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
