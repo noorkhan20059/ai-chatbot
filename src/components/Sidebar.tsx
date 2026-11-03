@@ -26,6 +26,7 @@ interface SidebarProps {
   theme: 'dark' | 'light';
   onToggleTheme: () => void;
   onOpenDocs: () => void;
+  onOpenApiKeyModal?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
 }
@@ -41,6 +42,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   theme,
   onToggleTheme,
   onOpenDocs,
+  onOpenApiKeyModal,
   isOpenMobile,
   onCloseMobile,
 }) => {
@@ -269,15 +271,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </div>
 
             {/* API Key Status */}
-            <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#1c1b1d] text-[11px] text-[#908fa0]">
+            <button
+              onClick={onOpenApiKeyModal}
+              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-[#1c1b1d] hover:bg-[#2a2a2c] text-[11px] text-[#908fa0] transition-colors cursor-pointer"
+              title="Click to update Gemini API Key"
+            >
               <div className="flex items-center gap-1.5">
                 <Key size={13} className="text-indigo-400" />
-                <span>API Key</span>
+                <span>API Key Settings</span>
               </div>
               <span className="text-indigo-400 text-[10px] font-medium bg-indigo-500/10 px-1.5 py-0.5 rounded">
-                Active & Secured
+                Configure
               </span>
-            </div>
+            </button>
 
             {/* Next.js Docs & Theme Toggles */}
             <div className="flex items-center justify-between gap-1 pt-1">

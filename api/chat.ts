@@ -9,7 +9,7 @@ try {
 }
 
 // Verified active user key from user prompt
-const ACTIVE_USER_KEY = 'AQ.Ab8RN6KyEVPKDi53bBYId6awYNXqJrhuyybOvQ1XCG2J4-rfgQ';
+const ACTIVE_USER_KEY = 'AQ.Ab8RN6K_6_BDU9MacU_swU_NpvY3qrwvaS2UrMq__Bj-rsdBBQ';
 
 const DEFAULT_PRECISION_SYSTEM_INSTRUCTION = `You are an accurate, concise, and ultra-fast multimodal AI assistant.
 Follow these core rules strictly:
@@ -23,12 +23,10 @@ Follow these core rules strictly:
 5. CODE PRECISION: For coding requests, provide clean, working code and briefly explain only the essential changes or logic.`;
 
 function sanitizeModel(modelName?: string): string {
-  if (!modelName) return 'gemini-3.1-flash-lite';
+  if (!modelName) return 'gemini-3.5-flash';
   const lower = modelName.toLowerCase();
-  if (lower.includes('3.8')) return 'gemini-3.1-flash-lite';
   if (lower.includes('lite')) return 'gemini-3.1-flash-lite';
-  if (lower.includes('flash')) return 'gemini-3.1-flash-lite';
-  return 'gemini-3.1-flash-lite';
+  return 'gemini-3.5-flash';
 }
 
 export default async function handler(req: any, res: any) {
@@ -50,12 +48,19 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
+  const clientApiKey = req.headers['x-gemini-api-key'] || req.body?.apiKey;
   const envKey = process.env.GEMINI_API_KEY;
-  // Use envKey if set and not the stale expired container token; otherwise fallback to active user key
-  const apiKey = (envKey && !envKey.startsWith('AQ.Ab8RN6L')) ? envKey : ACTIVE_USER_KEY;
+
+  let apiKey = ACTIVE_USER_KEY;
+  if (clientApiKey && typeof clientApiKey === 'string' && clientApiKey.trim()) {
+    apiKey = clientApiKey.trim();
+  } else if (envKey && typeof envKey === 'string' && envKey.trim() && !envKey.startsWith('AQ.Ab8RN6L')) {
+    apiKey = envKey.trim();
+  }
+
   if (!apiKey) {
     return res.status(500).json({
-      error: 'GEMINI_API_KEY is missing. Please set GEMINI_API_KEY in Vercel Project Settings > Environment Variables.',
+      error: 'GEMINI_API_KEY is missing. Please configure your API key in Vercel Environment Variables or click API Key in the app.',
     });
   }
 

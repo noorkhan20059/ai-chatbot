@@ -16,6 +16,7 @@ import { MessageItem } from './components/MessageItem';
 import { PromptComposer, ComposerAttachment } from './components/PromptComposer';
 import { DocsModal } from './components/DocsModal';
 import { RenameModal } from './components/RenameModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { Zap, ArrowRight, Loader2, Sparkles, MessageSquareDashed } from 'lucide-react';
 
 export default function App() {
@@ -35,6 +36,7 @@ export default function App() {
   // Modals
   const [docsModalOpen, setDocsModalOpen] = useState(false);
   const [renameModalOpen, setRenameModalOpen] = useState(false);
+  const [apiKeyModalOpen, setApiKeyModalOpen] = useState(false);
   const [renameTargetId, setRenameTargetId] = useState<string | null>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -286,13 +288,19 @@ export default function App() {
         text: a.textContent,
       }));
 
+      const customKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_api_key') : null;
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (customKey && customKey.trim()) {
+        headers['x-gemini-api-key'] = customKey.trim();
+      }
+
       let res: Response | null = null;
       let isDirectFallback = false;
 
       try {
         res = await fetch('/api/chat', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             prompt: userPrompt,
             messages: payloadMessages,
@@ -313,7 +321,7 @@ export default function App() {
       }
 
       if (isDirectFallback) {
-        const DIRECT_KEY = 'AQ.Ab8RN6KyEVPKDi53bBYId6awYNXqJrhuyybOvQ1XCG2J4-rfgQ';
+        const DIRECT_KEY = (customKey && customKey.trim()) || 'AQ.Ab8RN6K_6_BDU9MacU_swU_NpvY3qrwvaS2UrMq__Bj-rsdBBQ';
         const parts: any[] = [];
 
         if (payloadAttachments && payloadAttachments.length > 0) {
@@ -605,6 +613,7 @@ export default function App() {
         theme={theme}
         onToggleTheme={handleToggleTheme}
         onOpenDocs={() => setDocsModalOpen(true)}
+        onOpenApiKeyModal={() => setApiKeyModalOpen(true)}
         isOpenMobile={mobileMenuOpen}
         onCloseMobile={() => setMobileMenuOpen(false)}
       />
@@ -764,6 +773,13 @@ export default function App() {
         }
         onClose={() => setRenameModalOpen(false)}
         onSave={handleSaveRename}
+      />
+
+      {/* API Key Modal */}
+      <ApiKeyModal
+        isOpen={apiKeyModalOpen}
+        onClose={() => setApiKeyModalOpen(false)}
+        onKeySaved={() => {}}
       />
     </div>
   );
