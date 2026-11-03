@@ -1,4 +1,5 @@
 import express from 'express';
+import http from 'http';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -51,11 +52,15 @@ app.get('/api/models', (_req, res) => {
 // Setup Vite middleware in dev or static server in prod
 async function startServer() {
   const isProd = process.env.NODE_ENV === 'production';
+  const server = http.createServer(app);
 
   if (!isProd) {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -67,7 +72,7 @@ async function startServer() {
     });
   }
 
-  app.listen(Number(port), '0.0.0.0', () => {
+  server.listen(Number(port), '0.0.0.0', () => {
     console.log(`Gemini Next Chatbot server running at http://0.0.0.0:${port}`);
   });
 }

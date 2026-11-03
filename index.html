@@ -3,6 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      // Suppress benign Vite WebSocket / HMR disconnect warnings in cloud/iframe environments
+      window.addEventListener('unhandledrejection', function(e) {
+        var reason = e && (e.reason && (e.reason.message || String(e.reason)));
+        if (reason && (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1)) {
+          e.preventDefault();
+        }
+      });
+      window.addEventListener('error', function(e) {
+        var msg = e && (e.message || '');
+        if (msg && (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1)) {
+          e.preventDefault();
+        }
+      });
+    </script>
     <title>Gemini Next AI Chatbot</title>
     <meta name="description" content="Fast, modern, and responsive AI chatbot powered by Google Gemini API with conversation history CRUD and local storage persistence." />
     <meta property="og:title" content="Gemini Next AI Chatbot" />
