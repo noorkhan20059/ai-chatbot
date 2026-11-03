@@ -4,19 +4,63 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
-      // Suppress benign Vite WebSocket / HMR disconnect warnings in cloud/iframe environments
-      window.addEventListener('unhandledrejection', function(e) {
-        var reason = e && (e.reason && (e.reason.message || String(e.reason)));
-        if (reason && (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1)) {
-          e.preventDefault();
+      (function() {
+        // Prevent Vite HMR WebSocket connection failure in cloud dev preview environments
+        if (typeof window !== 'undefined' && window.WebSocket) {
+          var OrigWS = window.WebSocket;
+          function ViteHMRMockSocket(url, protocols) {
+            var isViteHMR = protocols === 'vite-hmr' || (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1);
+            if (isViteHMR) {
+              var target = new EventTarget();
+              target.readyState = 1; // WebSocket.OPEN
+              target.OPEN = 1;
+              target.CONNECTING = 0;
+              target.CLOSING = 2;
+              target.CLOSED = 3;
+              target.send = function() {};
+              target.close = function() {};
+              target.url = url;
+              target.protocol = 'vite-hmr';
+              return target;
+            }
+            return new OrigWS(url, protocols);
+          }
+          ViteHMRMockSocket.prototype = OrigWS.prototype;
+          ViteHMRMockSocket.OPEN = 1;
+          ViteHMRMockSocket.CONNECTING = 0;
+          ViteHMRMockSocket.CLOSING = 2;
+          ViteHMRMockSocket.CLOSED = 3;
+          window.WebSocket = ViteHMRMockSocket;
         }
-      });
-      window.addEventListener('error', function(e) {
-        var msg = e && (e.message || '');
-        if (msg && (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1)) {
-          e.preventDefault();
-        }
-      });
+
+        // Suppress any remaining benign Vite websocket error outputs
+        var origConsoleError = console.error;
+        console.error = function() {
+          var str = Array.prototype.slice.call(arguments).map(function(a) {
+            return (a && a.message) || String(a || '');
+          }).join(' ');
+          if (str.indexOf('WebSocket') !== -1 || str.indexOf('websocket') !== -1 || str.indexOf('[vite]') !== -1) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e && (e.reason && (e.reason.message || String(e.reason)));
+          if (reason && (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        });
+
+        window.addEventListener('error', function(e) {
+          var msg = e && (e.message || '');
+          if (msg && (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        });
+      })();
     </script>
     <title>Gemini Next AI Chatbot</title>
     <meta name="description" content="Fast, modern, and responsive AI chatbot powered by Google Gemini API with conversation history CRUD and local storage persistence." />

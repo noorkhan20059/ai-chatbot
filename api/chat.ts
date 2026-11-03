@@ -29,6 +29,52 @@ function sanitizeModel(modelName?: string): string {
   return 'gemini-3.5-flash';
 }
 
+async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, baseDelay = 800): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      attempt++;
+      const isRetryable =
+        err?.status === 429 ||
+        err?.status === 503 ||
+        err?.message?.includes('429') ||
+        err?.message?.includes('503') ||
+        err?.message?.includes('RESOURCE_EXHAUSTED') ||
+        err?.message?.includes('UNAVAILABLE') ||
+        err?.message?.includes('high demand');
+
+      if (attempt > maxRetries || !isRetryable) {
+        throw err;
+      }
+      const delay = baseDelay * Math.pow(2, attempt - 1);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
+function formatErrorMessage(rawErr: string): string {
+  if (
+    rawErr.includes('401') ||
+    rawErr.includes('API key not valid') ||
+    rawErr.includes('UNAUTHENTICATED') ||
+    rawErr.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED')
+  ) {
+    return `### ⚠️ Gemini API Authentication Error\n\nThe API key was rejected by Google Gemini.\n\n**To resolve:**\n1. Ensure your \`GEMINI_API_KEY\` is configured in your Vercel Project Settings > Environment Variables.\n2. Or click **API Key Settings** in the app's sidebar to enter your key directly from [Google AI Studio](https://aistudio.google.com/apikey).`;
+  }
+  if (rawErr.includes('429') || rawErr.includes('RESOURCE_EXHAUSTED') || rawErr.includes('Quota')) {
+    return `### ⏳ Rate Limit / Quota Exceeded\n\nThe Gemini API request limit has been reached. Please wait a few moments and try your prompt again.`;
+  }
+  if (rawErr.includes('503') || rawErr.includes('UNAVAILABLE') || rawErr.includes('high demand')) {
+    return `### 🌐 Gemini Model High Demand\n\nThe selected model is temporarily experiencing high traffic spikes. Retrying automatically or switching to another model usually resolves this in seconds.`;
+  }
+  if (rawErr.includes('ETIMEDOUT') || rawErr.includes('ECONNRESET') || rawErr.includes('fetch failed')) {
+    return `### 📡 Network Connection Issue\n\nCould not reach the Google Gemini API servers. Please verify your internet connection and try again.`;
+  }
+  return `### ⚠️ Request Error\n\n${rawErr.slice(0, 300)}. Please try again.`;
+}
+
 export default async function handler(req: any, res: any) {
   // CORS configuration for Vercel
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -169,11 +215,13 @@ export default async function handler(req: any, res: any) {
       let totalTokensEstimated = 0;
 
       const tryStream = async (modelName: string) => {
-        const responseStream = await ai.models.generateContentStream({
-          model: modelName,
-          contents,
-          config,
-        });
+        const responseStream = await withRetry(() =>
+          ai.models.generateContentStream({
+            model: modelName,
+            contents,
+            config,
+          })
+        );
 
         for await (const chunk of responseStream) {
           const textChunk = chunk.text;
@@ -196,18 +244,7 @@ export default async function handler(req: any, res: any) {
         } catch (backupErr: any) {
           console.error('All live models failed:', backupErr.message);
           const rawErr = backupErr.message || err.message || '';
-          let errText = rawErr;
-
-          if (
-            rawErr.includes('401') ||
-            rawErr.includes('API key not valid') ||
-            rawErr.includes('UNAUTHENTICATED')
-          ) {
-            errText = `### ⚠️ Gemini API Authentication Error\n\nThe API key was rejected by Google Gemini.\n\n**To resolve:**\n1. Check your \`GEMINI_API_KEY\` in your environment or Vercel Settings.\n2. Obtain a valid key from [Google AI Studio](https://aistudio.google.com/apikey).`;
-          } else {
-            errText = `I encountered an issue connecting to Gemini: ${rawErr}. Please try again.`;
-          }
-
+          const errText = formatErrorMessage(rawErr);
           res.write(`data: ${JSON.stringify({ text: errText, model: primaryModel })}\n\n`);
         }
       }
@@ -229,17 +266,21 @@ export default async function handler(req: any, res: any) {
       const startTime = Date.now();
       let response;
       try {
-        response = await ai.models.generateContent({
-          model: primaryModel,
-          contents,
-          config,
-        });
+        response = await withRetry(() =>
+          ai.models.generateContent({
+            model: primaryModel,
+            contents,
+            config,
+          })
+        );
       } catch {
-        response = await ai.models.generateContent({
-          model: 'gemini-3.5-flash',
-          contents,
-          config,
-        });
+        response = await withRetry(() =>
+          ai.models.generateContent({
+            model: 'gemini-3.5-flash',
+            contents,
+            config,
+          })
+        );
       }
 
       const elapsedMs = Date.now() - startTime;
@@ -253,7 +294,7 @@ export default async function handler(req: any, res: any) {
   } catch (error: any) {
     console.error('API /api/chat error:', error);
     return res.status(500).json({
-      error: error.message || 'Internal server error while processing Gemini API request.',
+      error: formatErrorMessage(error.message || 'Internal server error while processing Gemini API request.'),
     });
   }
 }
