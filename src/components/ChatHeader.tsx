@@ -168,7 +168,7 @@ export const ChatHeader: React.FC<ChatHeaderProps> = ({
         </span>
 
         <span className="hidden xl:inline-flex items-center gap-1 text-[10px] font-medium text-emerald-400 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-          ⚡ Direct Mode · Temp 0.3
+          🔒 /api/chat · Server-Side
         </span>
       </div>
 

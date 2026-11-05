@@ -288,90 +288,26 @@ export default function App() {
         text: a.textContent,
       }));
 
-      const customKey = typeof window !== 'undefined' ? localStorage.getItem('gemini_custom_api_key') : null;
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (customKey && customKey.trim()) {
-        headers['x-gemini-api-key'] = customKey.trim();
-      }
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: userPrompt,
+          messages: payloadMessages,
+          attachments: payloadAttachments,
+          model: activeConversation.model || 'gemini-3.1-flash-lite',
+          stream: true,
+        }),
+        signal: controller.signal,
+      });
 
-      let res: Response | null = null;
-      let isDirectFallback = false;
-
-      try {
-        res = await fetch('/api/chat', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            prompt: userPrompt,
-            messages: payloadMessages,
-            attachments: payloadAttachments,
-            model: activeConversation.model || 'gemini-3.1-flash-lite',
-            stream: true,
-          }),
-          signal: controller.signal,
-        });
-      } catch (networkErr: any) {
-        if (networkErr.name === 'AbortError') throw networkErr;
-        isDirectFallback = true;
-      }
-
-      // If /api/chat fails or returns 404/500/401 on Vercel, fallback directly to Gemini SSE
-      if (!res || !res.ok || res.status === 404 || res.status === 500 || res.status === 401) {
-        isDirectFallback = true;
-      }
-
-      if (isDirectFallback) {
-        const DIRECT_KEY = (customKey && customKey.trim()) || 'AQ.Ab8RN6KtHgAizYcjSdRB6O1kjDAasNZlLOoG_DGYRpCrQO4Vyw';
-        const parts: any[] = [];
-
-        if (payloadAttachments && payloadAttachments.length > 0) {
-          for (const att of payloadAttachments) {
-            if (att.data) {
-              parts.push({
-                inline_data: {
-                  mime_type: att.mimeType || 'image/jpeg',
-                  data: att.data.replace(/^data:[^;]+;base64,/, ''),
-                },
-              });
-            } else if (att.text) {
-              parts.push({ text: `[Document: ${att.name}]\n${att.text}` });
-            }
-          }
-        }
-
-        if (userPrompt) {
-          parts.push({ text: userPrompt });
-        }
-
-        const directContents = payloadMessages.slice(-6).map((m) => ({
-          role: m.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: m.content }],
-        }));
-        directContents.push({ role: 'user', parts });
-
-        const directUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:streamGenerateContent?alt=sse&key=${DIRECT_KEY}`;
-        res = await fetch(directUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: directContents,
-            system_instruction: {
-              parts: [{ text: 'You are an accurate, concise, ultra-fast AI assistant. Answer directly without fluff.' }],
-            },
-            generationConfig: {
-              temperature: 0.3,
-              maxOutputTokens: 2048,
-            },
-          }),
-          signal: controller.signal,
-        });
-      }
-
-      if (!res || !res.ok) {
-        const errorData = await res?.json().catch(() => ({}));
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
         let errMsg = errorData?.error?.message || errorData?.error;
         if (!errMsg) {
-          errMsg = `HTTP ${res?.status || 500}: Failed to reach Gemini API. Please check your network connection.`;
+          errMsg = `HTTP ${res.status}: Failed to reach server /api/chat endpoint.`;
         }
         throw new Error(errMsg);
       }

@@ -5,33 +5,64 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <script>
       (function() {
-        // Prevent Vite HMR WebSocket connection failure in cloud dev preview environments
-        if (typeof window !== 'undefined' && window.WebSocket) {
-          var OrigWS = window.WebSocket;
-          function ViteHMRMockSocket(url, protocols) {
-            var isViteHMR = protocols === 'vite-hmr' || (Array.isArray(protocols) && protocols.indexOf('vite-hmr') !== -1);
-            if (isViteHMR) {
-              var target = new EventTarget();
-              target.readyState = 1; // WebSocket.OPEN
-              target.OPEN = 1;
-              target.CONNECTING = 0;
-              target.CLOSING = 2;
-              target.CLOSED = 3;
-              target.send = function() {};
-              target.close = function() {};
-              target.url = url;
-              target.protocol = 'vite-hmr';
-              return target;
+        if (typeof window === 'undefined') return;
+
+        // Mock WebSocket for Vite HMR in cloud dev preview environments
+        var OrigWebSocket = window.WebSocket;
+        function MockWebSocket(url, protocols) {
+          this.url = url;
+          this.protocols = protocols;
+          this.readyState = 1; // WebSocket.OPEN
+          this.binaryType = 'blob';
+          this.bufferedAmount = 0;
+          this.extensions = '';
+          this.protocol = typeof protocols === 'string' ? protocols : (protocols && protocols[0]) || '';
+          this.listeners = {};
+          this.onopen = null;
+          this.onclose = null;
+          this.onerror = null;
+          this.onmessage = null;
+
+          var self = this;
+          setTimeout(function() {
+            var openEv = new Event('open');
+            self.dispatchEvent(openEv);
+            if (typeof self.onopen === 'function') {
+              try { self.onopen(openEv); } catch (e) {}
             }
-            return new OrigWS(url, protocols);
-          }
-          ViteHMRMockSocket.prototype = OrigWS.prototype;
-          ViteHMRMockSocket.OPEN = 1;
-          ViteHMRMockSocket.CONNECTING = 0;
-          ViteHMRMockSocket.CLOSING = 2;
-          ViteHMRMockSocket.CLOSED = 3;
-          window.WebSocket = ViteHMRMockSocket;
+          }, 0);
         }
+
+        MockWebSocket.prototype.addEventListener = function(type, fn) {
+          if (!this.listeners[type]) this.listeners[type] = [];
+          this.listeners[type].push(fn);
+        };
+
+        MockWebSocket.prototype.removeEventListener = function(type, fn) {
+          if (this.listeners[type]) {
+            this.listeners[type] = this.listeners[type].filter(function(cb) { return cb !== fn; });
+          }
+        };
+
+        MockWebSocket.prototype.dispatchEvent = function(event) {
+          var cbs = this.listeners[event.type] || [];
+          for (var i = 0; i < cbs.length; i++) {
+            try { cbs[i].call(this, event); } catch (e) {}
+          }
+          return true;
+        };
+
+        MockWebSocket.prototype.send = function() {};
+        MockWebSocket.prototype.close = function() {
+          this.readyState = 3;
+        };
+
+        MockWebSocket.CONNECTING = 0;
+        MockWebSocket.OPEN = 1;
+        MockWebSocket.CLOSING = 2;
+        MockWebSocket.CLOSED = 3;
+
+        window.WebSocket = MockWebSocket;
 
         // Suppress any remaining benign Vite websocket error outputs
         var origConsoleError = console.error;
@@ -47,19 +78,19 @@
 
         window.addEventListener('unhandledrejection', function(e) {
           var reason = e && (e.reason && (e.reason.message || String(e.reason)));
-          if (reason && (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1)) {
+          if (reason && (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1 || reason.indexOf('[vite]') !== -1)) {
             e.preventDefault();
             e.stopImmediatePropagation();
           }
-        });
+        }, true);
 
         window.addEventListener('error', function(e) {
           var msg = e && (e.message || '');
-          if (msg && (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1)) {
+          if (msg && (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1 || msg.indexOf('[vite]') !== -1)) {
             e.preventDefault();
             e.stopImmediatePropagation();
           }
-        });
+        }, true);
       })();
     </script>
     <title>Gemini Next AI Chatbot</title>

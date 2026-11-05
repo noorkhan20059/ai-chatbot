@@ -8,9 +8,6 @@ try {
   // Ignore in environments where not supported
 }
 
-// Verified active user key from user prompt
-const ACTIVE_USER_KEY = 'AQ.Ab8RN6KtHgAizYcjSdRB6O1kjDAasNZlLOoG_DGYRpCrQO4Vyw';
-
 const DEFAULT_PRECISION_SYSTEM_INSTRUCTION = `You are an accurate, concise, and ultra-fast multimodal AI assistant.
 Follow these core rules strictly:
 1. DIRECTNESS: Answer the user's exact question immediately. Do NOT include conversational filler, greetings, pleasantries, or introductory phrases (e.g., "Sure!", "Here is...", "As an AI...").
@@ -23,10 +20,11 @@ Follow these core rules strictly:
 5. CODE PRECISION: For coding requests, provide clean, working code and briefly explain only the essential changes or logic.`;
 
 function sanitizeModel(modelName?: string): string {
-  if (!modelName) return 'gemini-3.5-flash';
+  if (!modelName) return 'gemini-3.1-flash-lite';
   const lower = modelName.toLowerCase();
-  if (lower.includes('lite')) return 'gemini-3.1-flash-lite';
-  return 'gemini-3.5-flash';
+  if (lower.includes('lite') || lower.includes('3.1')) return 'gemini-3.1-flash-lite';
+  if (lower.includes('pro') || lower.includes('3.8')) return 'gemini-3.8-flash';
+  return 'gemini-3.1-flash-lite';
 }
 
 async function withRetry<T>(fn: () => Promise<T>, maxRetries = 2, baseDelay = 800): Promise<T> {
@@ -59,9 +57,10 @@ function formatErrorMessage(rawErr: string): string {
     rawErr.includes('401') ||
     rawErr.includes('API key not valid') ||
     rawErr.includes('UNAUTHENTICATED') ||
-    rawErr.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED')
+    rawErr.includes('ACCESS_TOKEN_TYPE_UNSUPPORTED') ||
+    rawErr.includes('API_KEY_INVALID')
   ) {
-    return `### ⚠️ Gemini API Authentication Error\n\nThe API key was rejected by Google Gemini.\n\n**To resolve:**\n1. Ensure your \`GEMINI_API_KEY\` is configured in your Vercel Project Settings > Environment Variables.\n2. Or click **API Key Settings** in the app's sidebar to enter your key directly from [Google AI Studio](https://aistudio.google.com/apikey).`;
+    return `### ⚠️ Gemini API Authentication Error\n\nThe API key was rejected by Google Gemini.\n\n**To resolve:**\n1. Ensure your \`GEMINI_API_KEY\` is configured correctly in your Vercel Project Settings > Environment Variables (or in \`.env.local\`).\n2. Verify the key on [Google AI Studio](https://aistudio.google.com/apikey).`;
   }
   if (rawErr.includes('429') || rawErr.includes('RESOURCE_EXHAUSTED') || rawErr.includes('Quota')) {
     return `### ⏳ Rate Limit / Quota Exceeded\n\nThe Gemini API request limit has been reached. Please wait a few moments and try your prompt again.`;
@@ -94,28 +93,34 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Method not allowed. Use POST.' });
   }
 
-  const clientApiKey = req.headers['x-gemini-api-key'] || req.body?.apiKey;
-  const envKey = process.env.GEMINI_API_KEY;
+  const {
+    prompt,
+    messages = [],
+    attachments = [],
+    model: requestedModel,
+    systemInstruction = DEFAULT_PRECISION_SYSTEM_INSTRUCTION,
+    stream = true,
+    maxHistoryTurns = 8,
+  } = req.body || {};
 
-  let apiKey = ACTIVE_USER_KEY;
-  if (clientApiKey && typeof clientApiKey === 'string' && clientApiKey.trim()) {
-    apiKey = clientApiKey.trim();
-  } else if (
-    envKey &&
-    typeof envKey === 'string' &&
-    envKey.trim() &&
-    !envKey.startsWith('AQ.Ab8RN6L') &&
-    !envKey.startsWith('AQ.Ab8RN6Ky') &&
-    !envKey.startsWith('AQ.Ab8RN6K_6_')
-  ) {
-    apiKey = envKey.trim();
-  }
+  const apiKey = (process.env.GEMINI_API_KEY || '').trim();
 
+  // Validate API key presence
   if (!apiKey) {
-    return res.status(500).json({
-      error: 'GEMINI_API_KEY is missing. Please configure your API key in Vercel Environment Variables or click API Key in the app.',
-    });
+    const missingMsg = `### ⚠️ Gemini API Key Missing\n\nThe \`GEMINI_API_KEY\` environment variable is not configured.\n\n**To resolve:**\n1. **On Vercel:** Open **vercel.com** → Your Project → **Settings** → **Environment Variables**.\n2. Add **Key:** \`GEMINI_API_KEY\` and **Value:** your Google Gemini key (starts with \`AIzaSy...\`).\n3. Click **Save** and trigger a **Redeploy** on Vercel.\n4. **In Local Dev:** Add \`GEMINI_API_KEY="AIzaSy..."\` to \`.env.local\`.\n\n👉 Create a free key at [Google AI Studio](https://aistudio.google.com/apikey).`;
+    
+    if (stream) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache, no-transform');
+      res.write(`data: ${JSON.stringify({ text: missingMsg, model: requestedModel || 'gemini-3.1-flash-lite' })}\n\n`);
+      res.write(`data: ${JSON.stringify({ done: true, elapsedMs: 0 })}\n\n`);
+      res.write('data: [DONE]\n\n');
+      return res.end();
+    }
+    return res.status(500).json({ error: missingMsg });
   }
+
+
 
   const ai = new GoogleGenAI({
     apiKey,
@@ -127,17 +132,6 @@ export default async function handler(req: any, res: any) {
   });
 
   try {
-    const {
-      prompt,
-      messages = [],
-      attachments = [],
-      model: requestedModel,
-      temperature = 0.3,
-      systemInstruction = DEFAULT_PRECISION_SYSTEM_INSTRUCTION,
-      stream = true,
-      maxHistoryTurns = 8,
-    } = req.body || {};
-
     const primaryModel = sanitizeModel(requestedModel);
 
     // Limit conversation history to the most recent relevant turns
@@ -198,9 +192,6 @@ export default async function handler(req: any, res: any) {
 
     const config: Record<string, any> = {
       systemInstruction,
-      temperature,
-      topP: 0.85,
-      maxOutputTokens: 2048,
     };
 
     if (stream) {
@@ -240,7 +231,7 @@ export default async function handler(req: any, res: any) {
       } catch (err: any) {
         console.warn(`Primary model ${primaryModel} failed (${err.message}), trying backup model...`);
         try {
-          await tryStream('gemini-3.5-flash');
+          await tryStream('gemini-3.8-flash');
         } catch (backupErr: any) {
           console.error('All live models failed:', backupErr.message);
           const rawErr = backupErr.message || err.message || '';
@@ -276,7 +267,7 @@ export default async function handler(req: any, res: any) {
       } catch {
         response = await withRetry(() =>
           ai.models.generateContent({
-            model: 'gemini-3.5-flash',
+            model: 'gemini-3.8-flash',
             contents,
             config,
           })
