@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <script>
+      (function() {
+        if (typeof window === 'undefined') return;
+
+        // Mock WebSocket for Vite HMR in cloud dev preview environments
+        var OrigWebSocket = window.WebSocket;
+        function MockWebSocket(url, protocols) {
+          this.url = url;
+          this.protocols = protocols;
+          this.readyState = 1; // WebSocket.OPEN
+          this.binaryType = 'blob';
+          this.bufferedAmount = 0;
+          this.extensions = '';
+          this.protocol = typeof protocols === 'string' ? protocols : (protocols && protocols[0]) || '';
+          this.listeners = {};
+          this.onopen = null;
+          this.onclose = null;
+          this.onerror = null;
+          this.onmessage = null;
+
+          var self = this;
+          setTimeout(function() {
+            var openEv = new Event('open');
+            self.dispatchEvent(openEv);
+            if (typeof self.onopen === 'function') {
+              try { self.onopen(openEv); } catch (e) {}
+            }
+          }, 0);
+        }
+
+        MockWebSocket.prototype.addEventListener = function(type, fn) {
+          if (!this.listeners[type]) this.listeners[type] = [];
+          this.listeners[type].push(fn);
+        };
+
+        MockWebSocket.prototype.removeEventListener = function(type, fn) {
+          if (this.listeners[type]) {
+            this.listeners[type] = this.listeners[type].filter(function(cb) { return cb !== fn; });
+          }
+        };
+
+        MockWebSocket.prototype.dispatchEvent = function(event) {
+          var cbs = this.listeners[event.type] || [];
+          for (var i = 0; i < cbs.length; i++) {
+            try { cbs[i].call(this, event); } catch (e) {}
+          }
+          return true;
+        };
+
+        MockWebSocket.prototype.send = function() {};
+        MockWebSocket.prototype.close = function() {
+          this.readyState = 3;
+        };
+
+        MockWebSocket.CONNECTING = 0;
+        MockWebSocket.OPEN = 1;
+        MockWebSocket.CLOSING = 2;
+        MockWebSocket.CLOSED = 3;
+
+        window.WebSocket = MockWebSocket;
+
+        // Suppress any remaining benign Vite websocket error outputs
+        var origConsoleError = console.error;
+        console.error = function() {
+          var str = Array.prototype.slice.call(arguments).map(function(a) {
+            return (a && a.message) || String(a || '');
+          }).join(' ');
+          if (str.indexOf('WebSocket') !== -1 || str.indexOf('websocket') !== -1 || str.indexOf('[vite]') !== -1) {
+            return;
+          }
+          origConsoleError.apply(console, arguments);
+        };
+
+        window.addEventListener('unhandledrejection', function(e) {
+          var reason = e && (e.reason && (e.reason.message || String(e.reason)));
+          if (reason && (reason.indexOf('WebSocket') !== -1 || reason.indexOf('websocket') !== -1 || reason.indexOf('[vite]') !== -1)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(e) {
+          var msg = e && (e.message || '');
+          if (msg && (msg.indexOf('WebSocket') !== -1 || msg.indexOf('websocket') !== -1 || msg.indexOf('[vite]') !== -1)) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+    <title>Gemini Next AI Chatbot</title>
+    <meta name="description" content="Fast, modern, and responsive AI chatbot powered by Google Gemini API with conversation history CRUD and local storage persistence." />
+    <meta property="og:title" content="Gemini Next AI Chatbot" />
+    <meta property="og:description" content="Fast, modern, and responsive AI chatbot powered by Google Gemini API with conversation history CRUD and local storage persistence." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    <script type="module" crossorigin src="/assets/index-pAfaaVNm.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-NuXSeypM.css">
+  </head>
+  <body class="bg-[#131315] text-[#e5e1e4] antialiased selection:bg-indigo-500/30 selection:text-indigo-200">
+    <div id="root"></div>
+  </body>
+</html>
+
